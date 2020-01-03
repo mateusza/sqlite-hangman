@@ -7,9 +7,11 @@
 ## Playing
 
     $ sqlite3 hangman.db
-    sqlite> select * from game;
 
-                     > insert into game select 'start';
+    sqlite> select * from game;
+      --==[ SQLite Hangman v0.0.1 ]==--
+
+      > insert into game select 'start';
 
          +-----+-+
          |      \|
@@ -23,12 +25,13 @@
     sqlite> insert into game select 'start';
 
     sqlite> select * from game;
+      --==[ SQLite Hangman v0.0.1 ]==--
 
-                     > insert into game select 'x';
+      > insert into game select 'x';
 
          +-----+-+
          |      \|
-         ^       |   ____
+         ^       |   _________
                  |
                  |   ...
                  |

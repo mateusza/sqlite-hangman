@@ -2,24 +2,25 @@ Begin;
 
 Create Table h_hangman_art ( line Text, num Int, minm Int, maxm Int );
 Insert Into h_hangman_art Values
-('', 0, 0, 6 ),
-('                 :MSG:', 1, 0, 6 ),
-('', 2, 0, 6 ),
-('     +-----+-+', 3, 0, 6 ),
-('     |      \|', 4, 0, 6 ),
-('     ^       |   :WORD:', 5, 0, 0 ),
-('     O       |   :WORD:', 5, 1, 6 ),
-('             |', 6, 0, 1 ),
-('     |       |', 6, 2, 2 ),
-('    /|       |', 6, 3, 3 ),
-('    /|\      |', 6, 4, 6 ),
-('             |   :GUESSES:', 7, 0, 4 ),
-('    /        |   :GUESSES:', 7, 5, 5 ),
-('    / \      |   :GUESSES:', 7, 6, 6 ),
-('             |', 8, 0, 6 ),
-('         ___/|\___', 9, 0, 6 ),
-('', 10, 0, 6 ),
-('', 11, 0, 6 );
+('  --==[ SQLite Hangman v0.0.1 ]==--', 0, 0, 6 ),
+('', 1, 0, 6 ),
+('  :MSG:', 2, 0, 6 ),
+('', 3, 0, 6 ),
+('     +-----+-+', 4, 0, 6 ),
+('     |      \|', 5, 0, 6 ),
+('     ^       |   :WORD:', 6, 0, 0 ),
+('     O       |   :WORD:', 6, 1, 6 ),
+('             |', 7, 0, 1 ),
+('     |       |', 7, 2, 2 ),
+('    /|       |', 7, 3, 3 ),
+('    /|\      |', 7, 4, 6 ),
+('             |   :GUESSES:', 8, 0, 4 ),
+('    /        |   :GUESSES:', 8, 5, 5 ),
+('    / \      |   :GUESSES:', 8, 6, 6 ),
+('             |', 9, 0, 6 ),
+('         ___/|\___', 10, 0, 6 ),
+('', 11, 0, 6 ),
+('', 12, 0, 6 );
 
 Create Table h_state ( key Text Unique, value Blob );
 Insert Into h_state Select 'fails', 0;
@@ -39,17 +40,18 @@ End;
 
 Create View message As
 Select
-    Case When ( Select Count() = 0 From h_guesses )
+    Case
+    When ( Select Count() = 0 From h_guesses )
     Then (
         Case When ( Select Count() = 0 From h_state Where key = 'word' )
         Then '> insert into game select ''start'';'
         Else '> insert into game select ''x'';' End
-        )
-    Else (
-        Case When ( Select value From h_State Where key = 'fails' ) = 6
-        Then 'GAME OVER'
-        Else '' End
-        )
+    )
+    When ( Select value From h_State Where key = 'fails' ) = 6
+    Then 'GAME OVER'
+    When '' || ( Select value From h_state Where key = 'renderword' ) = '' || ( Select value From h_state Where key = 'word' )
+    Then 'You won!'
+    Else ''
     End As msg;
 
 Create View game As
