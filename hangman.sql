@@ -2,7 +2,7 @@ Begin;
 
 Create Table h_hangman_art ( line Text, num Int, minm Int, maxm Int );
 Insert Into h_hangman_art Values
-('  --==[ SQLite Hangman v0.0.1 ]==--', 0, 0, 6 ),
+('  --==[ SQLite Hangman v0.0.2 ]==--', 0, 0, 6 ),
 ('', 1, 0, 6 ),
 ('  :MSG:', 2, 0, 6 ),
 ('', 3, 0, 6 ),
@@ -22,20 +22,22 @@ Insert Into h_hangman_art Values
 ('', 11, 0, 6 ),
 ('', 12, 0, 6 );
 
-Create Table h_state ( key Text Unique, value Blob );
-Insert Into h_state Select 'fails', 0;
+Create Table h_vars ( key Text Unique, value Blob );
+Insert Into h_vars Select 'fails', 0;
 Create Table h_words ( word Blob Not Null Unique );
 Create Table h_guesses ( letter Text Not Null Unique );
 Create Table h_abc ( letter Text Not Null Unique );
-Insert Into h_abc Select atom
-From JSON_Each( '["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"]' );
-Create Table h_hide_letters ( letter Varchar(1) Not Null Unique );
+With Recursive abc( letter ) As (
+    Select 'A' Union All Select Char( Unicode( letter ) + 1 ) From abc Where letter < 'Z'
+    )
+    Insert Into h_abc Select letter From abc;
 
-Drop Trigger If Exists action_remove_letter;
-Create Trigger action_remove_letter
-After Insert On h_hide_letters
+Create Table h_hidden_letters ( letter Varchar(1) Not Null Unique );
+
+Create Trigger remove_letters
+After Insert On h_hidden_letters
 Begin
-    Update h_state Set value = Replace( Upper( value ), Upper( new.letter ), '_' ) Where key = 'renderword';
+    Update h_vars Set value = Replace( Upper( value ), Upper( new.letter ), '_' ) Where key = 'question';
 End;
 
 Create View message As
@@ -43,13 +45,13 @@ Select
     Case
     When ( Select Count() = 0 From h_guesses )
     Then (
-        Case When ( Select Count() = 0 From h_state Where key = 'word' )
+        Case When ( Select Count() = 0 From h_vars Where key = 'word' )
         Then '> insert into game select ''start'';'
         Else '> insert into game select ''x'';' End
     )
-    When ( Select value From h_State Where key = 'fails' ) = 6
+    When ( Select value From h_vars Where key = 'fails' ) = 6
     Then 'GAME OVER'
-    When '' || ( Select value From h_state Where key = 'renderword' ) = '' || ( Select value From h_state Where key = 'word' )
+    When '' || ( Select value From h_vars Where key = 'question' ) = '' || ( Select value From h_vars Where key = 'word' )
     Then 'You won!'
     Else ''
     End As msg;
@@ -59,44 +61,43 @@ Select
     Replace(
         Replace( 
             Replace( line, ':MSG:', ( Select msg From message Limit 1 ) ),
-            ':WORD:', Coalesce( ( Select value From h_state Where key = 'renderword' ), '???' )
+            ':WORD:', Coalesce( ( Select value From h_vars Where key = 'question' ), '???' )
         ),
         ':GUESSES:', Coalesce( ( Select Group_Concat(letter) From h_guesses ), '...' )
     ) As game From h_hangman_art
-Where ( Select Cast ( value As Int ) From h_state Where key = 'fails' ) Between minm And maxm
+Where ( Select Cast ( value As Int ) From h_vars Where key = 'fails' ) Between minm And maxm
 Order By num;
 
 Create Trigger user_start
 Instead Of Insert On game
 When Upper( new.game ) = 'START'
 Begin
-    Insert Or Replace Into h_state
+    Insert Or Replace Into h_vars
         Select 'word', ( Select Cast ( Upper( word ) As Blob ) From h_words Order By Random() Limit 1 );
-    Insert Or Replace Into h_state
+    Insert Or Replace Into h_vars
         Select 'fails', 0;
-    Insert Or Replace Into h_state
-        Select 'renderword', ( Select value From h_state Where key = 'word' );
+    Insert Or Replace Into h_vars
+        Select 'question', ( Select value From h_vars Where key = 'word' );
     Delete From h_guesses;
-    Delete From h_hide_letters;
-    Insert Into h_hide_letters Select * From h_abc;
+    Delete From h_hidden_letters;
+    Insert Into h_hidden_letters Select * From h_abc;
 End;
 
-Drop Trigger If Exists user_letter;
 Create Trigger user_letter
 Instead Of Insert On game
 When
     Length( new.game ) = 1
     And ( Lower( new.game ) != Upper( new.game ) )
-    And ( Select Count() = 1 From h_state Where key = 'word' )
+    And ( Select Count() = 1 From h_vars Where key = 'word' )
 Begin
     Insert Into h_guesses Select Upper( new.game );
-    Insert Or Replace Into h_state
-        Select 'renderword', ( Select value From h_state Where key = 'word' );
-    Update h_state
-        Set value = value + ( Instr( ( Select Upper( value ) From h_state Where key = 'word' ), Upper( new.game ) ) = 0 )
+    Insert Or Replace Into h_vars
+        Select 'question', ( Select value From h_vars Where key = 'word' );
+    Update h_vars
+        Set value = value + ( Instr( ( Select Upper( value ) From h_vars Where key = 'word' ), Upper( new.game ) ) = 0 )
         Where key = 'fails';
-    Delete From h_hide_letters;
-    Insert Into h_hide_letters Select letter From h_abc Except Select letter From h_guesses;
+    Delete From h_hidden_letters;
+    Insert Into h_hidden_letters Select letter From h_abc Except Select letter From h_guesses;
 End;
 
 Insert Into h_words( word ) Select Cast ( atom As Blob ) From JSON_Each( 
