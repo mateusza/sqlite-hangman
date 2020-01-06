@@ -1,7 +1,7 @@
 Begin;
 
-Create Table h_hangman_art ( line Text, num Int, minm Int, maxm Int );
-Insert Into h_hangman_art Values
+Create Table hangman_art ( line Text, num Int, minm Int, maxm Int );
+Insert Into hangman_art Values
     ('  --==[ :TITLE: ]==--', 0, 0, 6 ),
     ('', 1, 0, 6 ),
     ('  :MSG:', 2, 0, 6 ),
@@ -22,19 +22,19 @@ Insert Into h_hangman_art Values
     ('', 11, 0, 6 ),
     ('', 12, 0, 6 );
 
-Create Table h_vars ( k Text Unique, v );
-Insert Into h_vars Select 'name', 'SQLite Hangman';
-Insert Into h_vars Select 'version', 'v0.1.0';
+Create Table vars ( k Text Unique, v );
+Insert Into vars Select 'name', 'SQLite Hangman';
+Insert Into vars Select 'version', 'v0.2.0';
 
-Create Table h_words ( id Integer Primary Key, word Text Not Null Unique );
-Create Table h_guesses ( letter Text Not Null Unique );
+Create Table words ( id Integer Primary Key, word Text Not Null Unique );
+Create Table guesses ( letter Text Not Null Unique );
 
 Create View word As
     Select Upper( word ) As word
-    From h_vars
-    Join h_words
-    On ( h_words.id = h_vars.v )
-    Where h_vars.k = 'wordid';
+    From vars
+    Join words
+    On ( words.id = vars.v )
+    Where vars.k = 'wordid';
 
 Create View question As
     With Recursive pos(n,q) As (
@@ -43,7 +43,7 @@ Create View question As
         Select
             n+1,
             q || Case
-            When Upper( Substr( (Select word From word ), n+1, 1 ) ) In ( Select Upper( letter ) From h_guesses )
+            When Upper( Substr( (Select word From word ), n+1, 1 ) ) In ( Select Upper( letter ) From guesses )
             Then Upper( Substr( (Select word From word ), n+1, 1 ) )
             Else '_'
             End
@@ -58,7 +58,7 @@ Create View question As
 
 Create View fails As
     Select letter
-    From h_guesses
+    From guesses
     Where InStr( ( Select word From word Limit 1 ), Upper( letter ) ) = 0;
 
 Create View failcount As
@@ -76,9 +76,9 @@ Create View status As
 Create View message As
     Select
         Case
-        When ( Select Count() = 0 From h_guesses )
+        When ( Select Count() = 0 From guesses )
         Then (
-            Case When ( Select Count() = 0 From h_vars Where k = 'wordid' )
+            Case When ( Select Count() = 0 From vars Where k = 'wordid' )
             Then '> insert into game select ''start'';'
             Else '> insert into game select ''x'';' End
         )
@@ -96,8 +96,8 @@ Create View game As
         Then Replace( line, ':MSG:', ( Select msg From message ) )
         When InStr( line, ':TITLE:' )
         Then Replace( line, ':TITLE:',
-            ( Select v From h_vars Where k = 'name' ) || ' ' ||
-            ( Select v From h_vars Where k = 'version' )
+            ( Select v From vars Where k = 'name' ) || ' ' ||
+            ( Select v From vars Where k = 'version' )
         )
         When InStr( line, ':WORD:' )
         Then Replace( line, ':WORD:', ( Select question From question ) )
@@ -107,17 +107,17 @@ Create View game As
             '...'
         ) )
         Else line End As game
-        From h_hangman_art
-        Where ( ( Select failcount From failcount ) Between minm And maxm )
+        From hangman_art
+        Where ( Select failcount Between minm And maxm From failcount )
         Order By num;
 
 Create Trigger action_start_game
     Instead Of Insert On game
     When Upper( new.game ) = 'START'
     Begin
-        Insert Or Replace Into h_vars
-            Select 'wordid', ( Select id From h_words Order By Random() Limit 1 );
-        Delete From h_guesses;
+        Insert Or Replace Into vars
+            Select 'wordid', id From words Order By Random() Limit 1;
+        Delete From guesses;
     End;
 
 Create Trigger action_guess_letter
@@ -125,207 +125,109 @@ Create Trigger action_guess_letter
     When
         Length( new.game ) = 1
         And ( Lower( new.game ) != Upper( new.game ) )
-        And ( Select Count() = 0 From h_guesses Where Upper( letter ) = Upper( new.game ) )
-        And ( Select Count() = 1 From h_vars Where k = 'wordid' )
+        And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
+        And ( Select Count() = 1 From vars Where k = 'wordid' )
     Begin
-        Insert Into h_guesses Select Upper( new.game );
+        Insert Into guesses Select Upper( new.game );
     End;
 
-Insert Into h_words( word ) Select atom From JSON_Each( 
-	X'5b22222c2270697065222c2277656c6c222c22696e647573747279222c2266616c6c222c' || 
-	X'2261726368222c22666c6f776572222c2273687574222c2273616665222c22706c656173' || 
-	X'65222c2267726970222c22646179222c226d6f6f6e222c2273706f6f6e222c22696e6b22' || 
-	X'2c226d617373222c227265616479222c22736f7570222c2262656e74222c226e6f736522' || 
-	X'2c22736b696e222c22776574222c22657175616c222c227363616c65222c22706f727465' || 
-	X'72222c2270617374222c22686f73706974616c222c2263617265222c22696e737472756d' || 
-	X'656e74222c226272757368222c22686f757365222c22776178222c226c656164222c226c' || 
-	X'6f7665222c2266696e676572222c22706f736974696f6e222c2273746174656d656e7422' || 
-	X'2c2261747461636b222c226375727461696e222c226f76656e222c22796f75222c226861' || 
-	X'707079222c226e657773222c2272657370656374222c227374616765222c22616e676c65' || 
-	X'222c226170706c65222c22616761696e7374222c22616e64222c2273616c74222c226275' || 
-	X'74746572222c22626f6479222c22736e65657a65222c226f766572222c22696e73656374' || 
-	X'222c22746f676574686572222c226f6666222c226469766973696f6e222c22626c6f6f64' || 
-	X'222c22666c616d65222c22646f6f72222c227361696c222c22646f756274222c226f6666' || 
-	X'6572222c2266656174686572222c2277697468222c22726f6164222c226576656e222c22' || 
-	X'73746f7265222c226e6f7465222c226d6174657269616c222c227265616374696f6e222c' || 
-	X'227768696c65222c226261636b222c22686f6c65222c22636f6174222c22726f6f74222c' || 
-	X'22666c6167222c22737469746368222c2268616e64222c2274727565222c226368757263' || 
-	X'68222c2273657276616e74222c226c616e64222c22636f70706572222c2268616972222c' || 
-	X'226c617374222c226368657374222c226164766572746973656d656e74222c226e656172' || 
-	X'222c22736c6970222c227468656f7279222c226d65646963616c222c227368616465222c' || 
-	X'22746f6f7468222c226c696b65222c22637275656c222c227175616c697479222c226576' || 
-	X'657279222c22656c656374726963222c2273756767657374696f6e222c226372696d6522' || 
-	X'2c22736d696c65222c22776879222c2273656e7365222c226275636b6574222c22636f6c' || 
-	X'6f7572222c22696e737572616e6365222c227472616e73706f7274222c227468756d6222' || 
-	X'2c22636f74746f6e222c22776865656c222c22706f7461746f222c2261626c65222c2268' || 
-	X'656c70222c22656e6f756768222c22666c79222c22736578222c22736d616c6c222c2263' || 
-	X'6f6d65222c226b6e6f74222c226d61746368222c226672756974222c2261636964222c22' || 
-	X'736b79222c2268656164222c22717569636b222c2262656175746966756c222c22746865' || 
-	X'222c22667574757265222c22736179222c22706f737369626c65222c2272656c6174696f' || 
-	X'6e222c22776179222c2262697264222c22636f756768222c226b6e6f776c65646765222c' || 
-	X'2273697a65222c2277686973746c65222c226368616e6365222c227061696e222c227375' || 
-	X'70706f7274222c2274686973222c22706f69736f6e222c227375676172222c2273746963' || 
-	X'6b222c22736d6f6b65222c226461756768746572222c226c61756768222c2270726f6669' || 
-	X'74222c22666c6f6f72222c226a75646765222c2266656172222c22626974746572222c22' || 
-	X'6f696c222c226578697374656e6365222c2272657175657374222c22636f6d706c657822' || 
-	X'2c227665727365222c22676f6174222c2273656c66222c2267756e222c22666c6174222c' || 
-	X'22627265617468222c226a756d70222c22756e6974222c22626565222c227265636f7264' || 
-	X'222c22616d6f6e67222c22666f7277617264222c2262616c6c222c22657870657269656e' || 
-	X'6365222c226c6f6f7365222c226465737472756374696f6e222c227768657265222c2261' || 
-	X'747472616374696f6e222c22736e6f77222c226672616d65222c22686973746f7279222c' || 
-	X'22626c7565222c22736c6f7065222c2266657274696c65222c226f72616e6765222c2274' || 
-	X'61737465222c22776172222c227469676874222c22776f726b222c224265726e68617264' || 
-	X'222c226c6974746c65222c2273656c656374696f6e222c2264697363757373696f6e222c' || 
-	X'226f72646572222c22726570726573656e746174697665222c2263616b65222c2273696c' || 
-	X'6b222c227365706172617465222c22726f756768222c226772617373222c226a6f696e22' || 
-	X'2c2273656174222c22616972222c2273686f7274222c22736f6e67222c22617070617261' || 
-	X'747573222c22636f6c6c6172222c22637279222c22736f6c6964222c22636972636c6522' || 
-	X'2c22666f726b222c22637261636b222c22627574222c22657870616e73696f6e222c226e' || 
-	X'6172726f77222c226561727468222c227468657265222c22726561736f6e222c22686f75' || 
-	X'72222c226669676874222c226d6f74686572222c2264656570222c226265686176696f75' || 
-	X'72222c22776f6f6c222c226d617272696564222c2269646561222c226d616e222c22706c' || 
-	X'6179222c226361757365222c22646973636f76657279222c22726567726574222c22636f' || 
-	X'6e74726f6c222c2274656e64656e6379222c22696e76656e74696f6e222c227369737465' || 
-	X'72222c227368616b65222c22616e73776572222c226e69676874222c226d6f7665222c22' || 
-	X'7368616d65222c2274696d65222c2273636973736f7273222c226669727374222c22416e' || 
-	X'64726f6964222c226d6179222c226578616d706c65222c22647261776572222c22666172' || 
-	X'222c22706c656173757265222c226661726d222c227468726f756768222c2273756e222c' || 
-	X'22646967657374696f6e222c226865617274222c22626564222c2268616d6d6572222c22' || 
-	X'6d65616c222c22646573697265222c226f6e6c79222c226f7065726174696f6e222c2266' || 
-	X'65656c696e67222c22686f6f6b222c226b6e6565222c22746f6e677565222c2274776973' || 
-	X'74222c2262726f74686572222c22636f6d6d6974746565222c22736563726574222c2262' || 
-	X'6c616465222c22776f6f64222c2268656172696e67222c22776f756e64222c2273706563' || 
-	X'69616c222c227363686f6f6c222c227374696666222c226272617373222c22666f726d22' || 
-	X'2c2273797374656d222c226c6f6f6b222c2263616d657261222c22736561222c22746861' || 
-	X'74222c226f6c64222c226c656174686572222c226465617468222c2270757368222c2264' || 
-	X'65636973696f6e222c226c696e656e222c2266616c7365222c22656e67696e65222c226c' || 
-	X'696e65222c226f70706f73697465222c2261626f7574222c226f70656e222c227061696e' || 
-	X'74222c227369676e222c22666f6f74222c2272696365222c2274616c6c222c2262656361' || 
-	X'757365222c226c6574222c226c6f77222c22726f64222c2264697365617365222c226f66' || 
-	X'66696365222c2270617263656c222c2277656174686572222c226769726c222c22736164' || 
-	X'222c2270726573656e74222c226c656166222c2270726f7065727479222c22706f6c6974' || 
-	X'6963616c222c22627269636b222c22736f6369657479222c22626f696c696e67222c2266' || 
-	X'6f726365222c2274686f75676874222c226d6f6e7468222c2267726579222c226a656c6c' || 
-	X'79222c22796f756e67222c22696d70756c7365222c2273656564222c2274726565222c22' || 
-	X'746f6d6f72726f77222c22626164222c226d61726b222c226c6561726e696e67222c2273' || 
-	X'77696d222c226275696c64696e67222c226265747765656e222c226669786564222c2269' || 
-	X'6365222c22706f636b6574222c2273746570222c226472696e6b222c2261726d79222c22' || 
-	X'706967222c2274657374222c227468656e222c22726f6f66222c22636c6f7468222c226d' || 
-	X'616e61676572222c227468726f6174222c227175696574222c227765656b222c22617574' || 
-	X'6f6d61746963222c22636c6f636b222c2265786368616e6765222c22666f6f64222c2261' || 
-	X'726d222c22636861696e222c2266696374696f6e222c22676c6f7665222c227368617270' || 
-	X'222c2265766572222c22686174222c226d697374222c22656172222c227261696e222c22' || 
-	X'726567756c6172222c227374617274222c227374726169676874222c227061796d656e74' || 
-	X'222c22617574686f72697479222c2268696768222c22616e677279222c22666565626c65' || 
-	X'222c2263617264222c22726f6c6c222c2264657461696c222c226c69676874222c227369' || 
-	X'6c766572222c22737465656c222c226272616e6368222c227468616e222c22626f6f6b22' || 
-	X'2c226d656173757265222c22746178222c22676574222c22646576656c6f706d656e7422' || 
-	X'2c2272756c65222c2262617468222c22707269736f6e222c226e616d65222c2270756e69' || 
-	X'73686d656e74222c2272616e6765222c22696e746572657374222c2268617264222c226e' || 
-	X'6577222c22737469636b79222c22626f6174222c22706f696e74222c2273756464656e22' || 
-	X'2c2266726565222c2267617264656e222c22617274222c22626c61636b222c2262616e64' || 
-	X'222c226b6e696665222c226d69786564222c226275727374222c2272656c6967696f6e22' || 
-	X'2c2276616c7565222c2268656174222c227072696365222c226163636f756e74222c2264' || 
-	X'72657373222c227365656d222c2274726f7573657273222c22756d6272656c6c61222c22' || 
-	X'657965222c2273616e64222c22616d6f756e74222c2270617274222c226c6f636b222c22' || 
-	X'77617665222c226c616e6775616765222c226b697373222c22636c656172222c22736f72' || 
-	X'74222c22706f77646572222c226c6576656c222c22637265646974222c22696c6c222c22' || 
-	X'626167222c2266656d616c65222c2267697665222c227761737465222c22636f7079222c' || 
-	X'2264656172222c22616e79222c22656666656374222c226d6f6e6b6579222c2274726179' || 
-	X'222c22736f6170222c2262697465222c2274616b65222c226c6574746572222c22656467' || 
-	X'65222c22636f6e646974696f6e222c226d6f726e696e67222c227761746368222c226578' || 
-	X'70657274222c22736f757468222c227061737465222c2277696e65222c226c656674222c' || 
-	X'227175697465222c227065616365222c226272656164222c227374726f6e67222c226465' || 
-	X'6c6963617465222c226c617465222c22737465616d222c22666174222c227461696c222c' || 
-	X'22626f6e65222c2270726f64756365222c2276657373656c222c2261677265656d656e74' || 
-	X'222c226272616b65222c2266616374222c226177616b65222c2264657369676e222c2265' || 
-	X'6475636174696f6e222c2277686f222c226b6579222c22646966666572656e74222c2273' || 
-	X'7472756374757265222c227475726e222c2270726f63657373222c2277697265222c2266' || 
-	X'6c69676874222c2273746f7279222c226c6567222c22636f6e6e656374696f6e222c2273' || 
-	X'746f6d616368222c227375727072697365222c226c6970222c226164646974696f6e222c' || 
-	X'22626173696e222c2264656164222c2268617665222c22626f78222c2262617365222c22' || 
-	X'616761696e222c226561726c79222c226c6976696e67222c22736f6e222c22656767222c' || 
-	X'2277696e746572222c227768697465222c2273756d6d6572222c226e7574222c22706c61' || 
-	X'7465222c226d696e65222c226b656570222c2277657374222c22796573222c2273746f70' || 
-	X'222c22636c65616e222c226b6574746c65222c22676f7665726e6d656e74222c22706167' || 
-	X'65222c226375727665222c226d656574696e67222c227175657374696f6e222c226e6174' || 
-	X'696f6e222c226d696e64222c227374696c6c222c226269727468222c226572726f72222c' || 
-	X'226469727479222c226e65727665222c2263617274222c226c696d6974222c2273706f6e' || 
-	X'6765222c2272656164696e67222c226265727279222c226865616c746879222c22726f6f' || 
-	X'6d222c226365727461696e222c22636f77222c2266726f6d222c22707572706f7365222c' || 
-	X'226e61696c222c22726564222c226166746572222c22706c616e65222c22746872656164' || 
-	X'222c22636c6f7564222c226672657175656e74222c226861726d6f6e79222c2262616c61' || 
-	X'6e6365222c22646973747269627574696f6e222c2273686f65222c22616c6c222c227374' || 
-	X'6172222c224272657974656e62616368222c22737472656574222c22636f726b222c226e' || 
-	X'6f697365222c2270656e63696c222c22617474656d7074222c22706f6f72222c226f7069' || 
-	X'6e696f6e222c226e6574222c22736d656c6c222c2270726f7365222c22647279222c2262' || 
-	X'6f617264222c226c6177222c2261646a7573746d656e74222c22706879736963616c222c' || 
-	X'22746869636b222c2264697374616e6365222c227269766572222c22656e64222c226e6f' || 
-	X'74222c2273696d706c65222c2273746f636b696e67222c226368656d6963616c222c2277' || 
-	X'617368222c22706c616365222c22736565222c226d6964646c65222c22646f67222c2270' || 
-	X'6c616e74222c22636f6e7363696f7573222c227472616465222c22706c6f756768222c22' || 
-	X'626f74746c65222c2277696e64222c22627574746f6e222c22706172616c6c656c222c22' || 
-	X'6d7573636c65222c22706f74222c2273747265746368222c22626f6f74222c2274726963' || 
-	X'6b222c22736f756e64222c2272696e67222c22617267756d656e74222c2272657374222c' || 
-	X'22727562222c2266697265222c226f62736572766174696f6e222c22646567726565222c' || 
-	X'2268617465222c226c697374222c22686f6c6c6f77222c22666174686572222c22666f72' || 
-	X'222c226c696272617279222c22776f6d616e222c22696d706f7274616e74222c22776169' || 
-	X'74696e67222c22736d6f6f7468222c226d6f756e7461696e222c22706f6c697368222c22' || 
-	X'70696374757265222c22616e74222c22636f6d6d6f6e222c227374616d70222c22636f61' || 
-	X'6c222c2273746f6e65222c2267726f7570222c22636f6c64222c22796573746572646179' || 
-	X'222c22746f776e222c226d6170222c22636174222c2270756d70222c22676f6f64222c22' || 
-	X'7468696e67222c226f74686572222c2277696465222c226d75736963222c2277616c6b22' || 
-	X'2c2263757368696f6e222c22676c617373222c2262756c62222c226e6f727468222c2262' || 
-	X'726f6b656e222c227768656e222c2266697368222c22636f766572222c227365636f6e64' || 
-	X'222c2270726f74657374222c22627573696e657373222c22757365222c2277696e646f77' || 
-	X'222c2272756e222c22736b697274222c22746f756368222c2266616d696c79222c226375' || 
-	X'70222c2270726f6261626c65222c2266616365222c226d616368696e65222c226d696c69' || 
-	X'74617279222c22646f776e222c226d696c6b222c22776f726d222c2268756d6f7572222c' || 
-	X'22626974222c2264726976696e67222c2267656e6572616c222c226e6563657373617279' || 
-	X'222c22646972656374696f6e222c2273686970222c227468756e646572222c2273696465' || 
-	X'222c226d61726b6574222c226e756d626572222c22737175617265222c227374656d222c' || 
-	X'22706f776572222c226f7574222c226d656d6f7279222c2274696c6c222c227368656570' || 
-	X'222c226c696674222c227061706572222c2263757272656e74222c22726577617264222c' || 
-	X'2264616e676572222c2262726f776e222c22686172626f7572222c2262616279222c2272' || 
-	X'6174222c227261696c222c226c6f6e67222c226f776e6572222c2277726f6e67222c2263' || 
-	X'68696e222c2266756c6c222c226d6f6e6579222c22686f727365222c2273656e64222c22' || 
-	X'6b696e64222c22636f6d666f7274222c22736f6d65222c22636f6d70617269736f6e222c' || 
-	X'226d6f757468222c226775696465222c227368697274222c22737072696e67222c226261' || 
-	X'736b6574222c22647261696e222c226f726e616d656e74222c22626c6f77222c22666f6f' || 
-	X'6c697368222c227468696e222c2262656c6c222c22726179222c2264726f70222c226772' || 
-	X'6f777468222c22616e696d616c222c22627269646765222c226e61747572616c222c2272' || 
-	X'6f756e64222c226c6971756964222c226c6f7373222c2276657279222c22636f6d70616e' || 
-	X'79222c22736d617368222c22736f636b222c22636f6d62222c2264656274222c22696e63' || 
-	X'7265617365222c226e656564222c22627269676874222c22666f6c64222c2270656e222c' || 
-	X'22666f776c222c22686f7065222c22617070726f76616c222c2277696e67222c22776569' || 
-	X'676874222c226163726f7373222c2262656c696566222c2270756c6c222c22617474656e' || 
-	X'74696f6e222c2269726f6e222c227761726d222c2277697365222c22736369656e636522' || 
-	X'2c22636f6d706c657465222c2276696577222c227761746572222c22636f756e74727922' || 
-	X'2c22616d7573656d656e74222c2263616e766173222c226372757368222c2268616e6769' || 
-	X'6e67222c227375627374616e6365222c22746f70222c22707574222c22726573706f6e73' || 
-	X'69626c65222c22627261696e222c227465616368696e67222c22636f6f6b222c22686f72' || 
-	X'6e222c226e65636b222c22636865657365222c227469726564222c227370616365222c22' || 
-	X'79656172222c22686f77222c226e6f726d616c222c226b69636b222c22646570656e6465' || 
-	X'6e74222c22736c656570222c2269736c616e64222c226368616e6765222c227265636569' || 
-	X'7074222c226a6577656c222c226d656174222c226d6574616c222c22706572736f6e222c' || 
-	X'226c6f7564222c22636f6d7065746974696f6e222c226a6f75726e6579222c2264757374' || 
-	X'222c227075626c6963222c2273756368222c227469636b6574222c2277726974696e6722' || 
-	X'2c22736e616b65222c226d6f74696f6e222c2264697367757374222c226368696566222c' || 
-	X'2270696e222c227377656574222c22677261696e222c2274696e222c2270726976617465' || 
-	X'222c22676f6c64222c226d616c65222c226275726e222c22737472616e6765222c226d69' || 
-	X'6e757465222c2272617465222c227370616465222c22736c6f77222c2274726f75626c65' || 
-	X'222c22636f7264222c226265666f7265222c2264616d616765222c22616374222c227361' || 
-	X'6d65222c22736563726574617279222c226e6f77222c227368656c66222c22776f726422' || 
-	X'2c2276696f6c656e74222c2277696c6c222c226368656170222c226772656174222c2274' || 
-	X'7261696e222c22766f696365222c2272687974686d222c2266726f6e74222c2273657269' || 
-	X'6f7573222c226461726b222c227461626c65222c22626f79222c226669656c64222c2273' || 
-	X'6f6674222c226e6565646c65222c226d616b65222c2274616c6b222c2265617374222c22' || 
-	X'73686f636b222c2277686970222c2268656172222c227269676874222c22616c6d6f7374' || 
-	X'222c227072696e74222c2279656c6c6f77222c226576656e74222c226368616c6b222c22' || 
-	X'6d756368222c226f7267616e697a6174696f6e222c2273746174696f6e222c2273637265' || 
-	X'77222c22667269656e64222c22656c6173746963222c22746f65222c2277616c6c222c22' || 
-	X'6361727269616765222c22756e646572222c22677265656e225d'
-    )
+Insert Into words( word ) Select atom From JSON_Each( 
+    '["able","about","account","acid","across","act","addition","adjustment",' ||
+    '"advertisement","after","again","against","agreement","air","all","almos' ||
+    't","among","amount","amusement","and","angle","angry","animal","answer",' ||
+    '"ant","any","apparatus","apple","approval","arch","argument","arm","army' ||
+    '","art","attack","attempt","attention","attraction","authority","automat' ||
+    'ic","awake","baby","back","bad","bag","balance","ball","band","base","ba' ||
+    'sin","basket","bath","beautiful","because","bed","bee","before","behavio' ||
+    'ur","belief","bell","bent","berry","between","bird","birth","bit","bite"' ||
+    ',"bitter","black","blade","blood","blow","blue","board","boat","body","b' ||
+    'oiling","bone","book","boot","bottle","box","boy","brain","brake","branc' ||
+    'h","brass","bread","breath","brick","bridge","bright","broken","brother"' ||
+    ',"brown","brush","bucket","building","bulb","burn","burst","business","b' ||
+    'ut","butter","button","cake","camera","canvas","card","care","carriage",' ||
+    '"cart","cat","cause","certain","chain","chalk","chance","change","cheap"' ||
+    ',"cheese","chemical","chest","chief","chin","church","circle","clean","c' ||
+    'lear","clock","cloth","cloud","coal","coat","cold","collar","colour","co' ||
+    'mb","come","comfort","committee","common","company","comparison","compet' ||
+    'ition","complete","complex","condition","connection","conscious","contro' ||
+    'l","cook","copper","copy","cord","cork","cotton","cough","country","cove' ||
+    'r","cow","crack","credit","crime","cruel","crush","cry","cup","current",' ||
+    '"curtain","curve","cushion","damage","danger","dark","daughter","day","d' ||
+    'ead","dear","death","debt","decision","deep","degree","delicate","depend' ||
+    'ent","design","desire","destruction","detail","development","different",' ||
+    '"digestion","direction","dirty","discovery","discussion","disease","disg' ||
+    'ust","distance","distribution","division","dog","door","doubt","down","d' ||
+    'rain","drawer","dress","drink","driving","drop","dry","dust","ear","earl' ||
+    'y","earth","east","edge","education","effect","egg","elastic","electric"' ||
+    ',"end","engine","enough","equal","error","even","event","ever","every","' ||
+    'example","exchange","existence","expansion","experience","expert","eye",' ||
+    '"face","fact","fall","false","family","far","farm","fat","father","fear"' ||
+    ',"feather","feeble","feeling","female","fertile","fiction","field","figh' ||
+    't","finger","fire","first","fish","fixed","flag","flame","flat","flight"' ||
+    ',"floor","flower","fly","fold","food","foolish","foot","for","force","fo' ||
+    'rk","form","forward","fowl","frame","free","frequent","friend","from","f' ||
+    'ront","fruit","full","future","garden","general","get","girl","give","gl' ||
+    'ass","glove","goat","gold","good","government","grain","grass","great","' ||
+    'green","grey","grip","group","growth","guide","gun","hair","hammer","han' ||
+    'd","hanging","happy","harbour","hard","harmony","hat","hate","have","hea' ||
+    'd","healthy","hear","hearing","heart","heat","help","high","history","ho' ||
+    'le","hollow","hook","hope","horn","horse","hospital","hour","house","how' ||
+    '","humour","ice","idea","ill","important","impulse","increase","industry' ||
+    '","ink","insect","instrument","insurance","interest","invention","iron",' ||
+    '"island","jelly","jewel","join","journey","judge","jump","keep","kettle"' ||
+    ',"key","kick","kind","kiss","knee","knife","knot","knowledge","land","la' ||
+    'nguage","last","late","laugh","law","lead","leaf","learning","leather","' ||
+    'left","leg","let","letter","level","library","lift","light","like","limi' ||
+    't","line","linen","lip","liquid","list","little","living","lock","long",' ||
+    '"look","loose","loss","loud","love","low","machine","make","male","man",' ||
+    '"manager","map","mark","market","married","mass","match","material","may' ||
+    '","meal","measure","meat","medical","meeting","memory","metal","middle",' ||
+    '"military","milk","mind","mine","minute","mist","mixed","money","monkey"' ||
+    ',"month","moon","morning","mother","motion","mountain","mouth","move","m' ||
+    'uch","muscle","music","nail","name","narrow","nation","natural","near","' ||
+    'necessary","neck","need","needle","nerve","net","new","news","night","no' ||
+    'ise","normal","north","nose","not","note","now","number","nut","observat' ||
+    'ion","off","offer","office","oil","old","only","open","operation","opini' ||
+    'on","opposite","orange","order","organization","ornament","other","out",' ||
+    '"oven","over","owner","page","pain","paint","paper","parallel","parcel",' ||
+    '"part","past","paste","payment","peace","pen","pencil","person","physica' ||
+    'l","picture","pig","pin","pipe","place","plane","plant","plate","play","' ||
+    'please","pleasure","plough","pocket","point","poison","polish","politica' ||
+    'l","poor","porter","position","possible","pot","potato","powder","power"' ||
+    ',"present","price","print","prison","private","probable","process","prod' ||
+    'uce","profit","property","prose","protest","public","pull","pump","punis' ||
+    'hment","purpose","push","put","quality","question","quick","quiet","quit' ||
+    'e","rail","rain","range","rat","rate","ray","reaction","reading","ready"' ||
+    ',"reason","receipt","record","red","regret","regular","relation","religi' ||
+    'on","representative","request","respect","responsible","rest","reward","' ||
+    'rhythm","rice","right","ring","river","road","rod","roll","roof","room",' ||
+    '"root","rough","round","rub","rule","run","sad","safe","sail","salt","sa' ||
+    'me","sand","say","scale","school","science","scissors","screw","sea","se' ||
+    'at","second","secret","secretary","see","seed","seem","selection","self"' ||
+    ',"send","sense","separate","serious","servant","sex","shade","shake","sh' ||
+    'ame","sharp","sheep","shelf","ship","shirt","shock","shoe","short","shut' ||
+    '","side","sign","silk","silver","simple","sister","size","skin","skirt",' ||
+    '"sky","sleep","slip","slope","slow","small","smash","smell","smile","smo' ||
+    'ke","smooth","snake","sneeze","snow","soap","society","sock","soft","sol' ||
+    'id","some","son","song","sort","sound","soup","south","space","spade","s' ||
+    'pecial","sponge","spoon","spring","square","stage","stamp","star","start' ||
+    '","statement","station","steam","steel","stem","step","stick","sticky","' ||
+    'stiff","still","stitch","stocking","stomach","stone","stop","store","sto' ||
+    'ry","straight","strange","street","stretch","strong","structure","substa' ||
+    'nce","such","sudden","sugar","suggestion","summer","sun","support","surp' ||
+    'rise","sweet","swim","system","table","tail","take","talk","tall","taste' ||
+    '","tax","teaching","tendency","test","than","that","the","then","theory"' ||
+    ',"there","thick","thin","thing","this","thought","thread","throat","thro' ||
+    'ugh","thumb","thunder","ticket","tight","till","time","tin","tired","toe' ||
+    '","together","tomorrow","tongue","tooth","top","touch","town","trade","t' ||
+    'rain","transport","tray","tree","trick","trouble","trousers","true","tur' ||
+    'n","twist","umbrella","under","unit","use","value","verse","very","vesse' ||
+    'l","view","violent","voice","waiting","walk","wall","war","warm","wash",' ||
+    '"waste","watch","water","wave","wax","way","weather","week","weight","we' ||
+    'll","west","wet","wheel","when","where","while","whip","whistle","white"' ||
+    ',"who","why","wide","will","wind","window","wine","wing","winter","wire"' ||
+    ',"wise","with","woman","wood","wool","word","work","worm","wound","writi' ||
+    'ng","wrong","year","yellow","yes","yesterday","you","young"]' )
     Where type = 'text';
 
 Commit;
