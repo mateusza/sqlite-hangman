@@ -2,105 +2,136 @@ Begin;
 
 Create Table h_hangman_art ( line Text, num Int, minm Int, maxm Int );
 Insert Into h_hangman_art Values
-('  --==[ SQLite Hangman v0.0.2 ]==--', 0, 0, 6 ),
-('', 1, 0, 6 ),
-('  :MSG:', 2, 0, 6 ),
-('', 3, 0, 6 ),
-('     +-----+-+', 4, 0, 6 ),
-('     |      \|', 5, 0, 6 ),
-('     ^       |   :WORD:', 6, 0, 0 ),
-('     O       |   :WORD:', 6, 1, 6 ),
-('             |', 7, 0, 1 ),
-('     |       |', 7, 2, 2 ),
-('    /|       |', 7, 3, 3 ),
-('    /|\      |', 7, 4, 6 ),
-('             |   :GUESSES:', 8, 0, 4 ),
-('    /        |   :GUESSES:', 8, 5, 5 ),
-('    / \      |   :GUESSES:', 8, 6, 6 ),
-('             |', 9, 0, 6 ),
-('         ___/|\___', 10, 0, 6 ),
-('', 11, 0, 6 ),
-('', 12, 0, 6 );
+    ('  --==[ :TITLE: ]==--', 0, 0, 6 ),
+    ('', 1, 0, 6 ),
+    ('  :MSG:', 2, 0, 6 ),
+    ('', 3, 0, 6 ),
+    ('     +-----+-+', 4, 0, 6 ),
+    ('     |      \|', 5, 0, 6 ),
+    ('     ^       |   :WORD:', 6, 0, 0 ),
+    ('     O       |   :WORD:', 6, 1, 6 ),
+    ('             |', 7, 0, 1 ),
+    ('     |       |', 7, 2, 2 ),
+    ('    /|       |', 7, 3, 3 ),
+    ('    /|\      |', 7, 4, 6 ),
+    ('             |   :GUESSES:', 8, 0, 4 ),
+    ('    /        |   :GUESSES:', 8, 5, 5 ),
+    ('    / \      |   :GUESSES:', 8, 6, 6 ),
+    ('             |', 9, 0, 6 ),
+    ('         ___/|\___', 10, 0, 6 ),
+    ('', 11, 0, 6 ),
+    ('', 12, 0, 6 );
 
-Create Table h_vars ( key Text Unique, value Blob );
-Insert Into h_vars Select 'fails', 0;
-Create Table h_words ( word Blob Not Null Unique );
+Create Table h_vars ( k Text Unique, v );
+Insert Into h_vars Select 'name', 'SQLite Hangman';
+Insert Into h_vars Select 'version', 'v0.1.0';
+
+Create Table h_words ( id Integer Primary Key, word Text Not Null Unique );
 Create Table h_guesses ( letter Text Not Null Unique );
-Create Table h_abc ( letter Text Not Null Unique );
-With Recursive abc( letter ) As (
-    Select 'A' Union All Select Char( Unicode( letter ) + 1 ) From abc Where letter < 'Z'
+
+Create View word As
+    Select Upper( word ) As word
+    From h_vars
+    Join h_words
+    On ( h_words.id = h_vars.v )
+    Where h_vars.k = 'wordid';
+
+Create View question As
+    With Recursive pos(n,q) As (
+        Select 0 As n , '' As q
+        Union All
+        Select
+            n+1,
+            q || Case
+            When Upper( Substr( (Select word From word ), n+1, 1 ) ) In ( Select Upper( letter ) From h_guesses )
+            Then Upper( Substr( (Select word From word ), n+1, 1 ) )
+            Else '_'
+            End
+        From pos
+        Where n < ( Select Length( word ) From word Limit 1 )
     )
-    Insert Into h_abc Select letter From abc;
+    Select
+        q As question
+    From pos
+    Order By n Desc
+    Limit 1;
 
-Create Table h_hidden_letters ( letter Varchar(1) Not Null Unique );
+Create View fails As
+    Select letter
+    From h_guesses
+    Where InStr( ( Select word From word Limit 1 ), Upper( letter ) ) = 0;
 
-Create Trigger remove_letters
-After Insert On h_hidden_letters
-Begin
-    Update h_vars Set value = Replace( Upper( value ), Upper( new.letter ), '_' ) Where key = 'question';
-End;
+Create View failcount As
+    Select count() as failcount From fails;
+
+Create View status As
+    Select Case
+    When ( Select failcount = 6 From failcount )
+    Then 'gameover'
+    When ( Select question = word From word Join question )
+    Then 'win'
+    Else 'guess'
+    End As status;
 
 Create View message As
-Select
-    Case
-    When ( Select Count() = 0 From h_guesses )
-    Then (
-        Case When ( Select Count() = 0 From h_vars Where key = 'word' )
-        Then '> insert into game select ''start'';'
-        Else '> insert into game select ''x'';' End
-    )
-    When ( Select value From h_vars Where key = 'fails' ) = 6
-    Then 'GAME OVER'
-    When '' || ( Select value From h_vars Where key = 'question' ) = '' || ( Select value From h_vars Where key = 'word' )
-    Then 'You won!'
-    Else ''
-    End As msg;
+    Select
+        Case
+        When ( Select Count() = 0 From h_guesses )
+        Then (
+            Case When ( Select Count() = 0 From h_vars Where k = 'wordid' )
+            Then '> insert into game select ''start'';'
+            Else '> insert into game select ''x'';' End
+        )
+        When ( Select 'gameover' = status From status )
+        Then 'GAME OVER'
+        When ( Select 'win' = status From status )
+        Then 'You won!'
+        Else 'Guess another letter.'
+        End As msg;
 
 Create View game As
-Select
-    Replace(
-        Replace( 
-            Replace( line, ':MSG:', ( Select msg From message Limit 1 ) ),
-            ':WORD:', Coalesce( ( Select value From h_vars Where key = 'question' ), '???' )
-        ),
-        ':GUESSES:', Coalesce( ( Select Group_Concat(letter) From h_guesses ), '...' )
-    ) As game From h_hangman_art
-Where ( Select Cast ( value As Int ) From h_vars Where key = 'fails' ) Between minm And maxm
-Order By num;
+    Select
+        Case
+        When InStr( line, ':MSG:' )
+        Then Replace( line, ':MSG:', ( Select msg From message ) )
+        When InStr( line, ':TITLE:' )
+        Then Replace( line, ':TITLE:',
+            ( Select v From h_vars Where k = 'name' ) || ' ' ||
+            ( Select v From h_vars Where k = 'version' )
+        )
+        When InStr( line, ':WORD:' )
+        Then Replace( line, ':WORD:', ( Select question From question ) )
+        When InStr( line, ':GUESSES:' )
+        Then Replace( line, ':GUESSES:', Coalesce(
+            ( Select Group_Concat( letter ) From fails ),
+            '...'
+        ) )
+        Else line End As game
+        From h_hangman_art
+        Where ( ( Select failcount From failcount ) Between minm And maxm )
+        Order By num;
 
-Create Trigger user_start
-Instead Of Insert On game
-When Upper( new.game ) = 'START'
-Begin
-    Insert Or Replace Into h_vars
-        Select 'word', ( Select Cast ( Upper( word ) As Blob ) From h_words Order By Random() Limit 1 );
-    Insert Or Replace Into h_vars
-        Select 'fails', 0;
-    Insert Or Replace Into h_vars
-        Select 'question', ( Select value From h_vars Where key = 'word' );
-    Delete From h_guesses;
-    Delete From h_hidden_letters;
-    Insert Into h_hidden_letters Select * From h_abc;
-End;
+Create Trigger action_start_game
+    Instead Of Insert On game
+    When Upper( new.game ) = 'START'
+    Begin
+        Insert Or Replace Into h_vars
+            Select 'wordid', ( Select id From h_words Order By Random() Limit 1 );
+        Delete From h_guesses;
+    End;
 
-Create Trigger user_letter
-Instead Of Insert On game
-When
-    Length( new.game ) = 1
-    And ( Lower( new.game ) != Upper( new.game ) )
-    And ( Select Count() = 1 From h_vars Where key = 'word' )
-Begin
-    Insert Into h_guesses Select Upper( new.game );
-    Insert Or Replace Into h_vars
-        Select 'question', ( Select value From h_vars Where key = 'word' );
-    Update h_vars
-        Set value = value + ( Instr( ( Select Upper( value ) From h_vars Where key = 'word' ), Upper( new.game ) ) = 0 )
-        Where key = 'fails';
-    Delete From h_hidden_letters;
-    Insert Into h_hidden_letters Select letter From h_abc Except Select letter From h_guesses;
-End;
+Create Trigger action_guess_letter
+    Instead Of Insert On game
+    When
+        Length( new.game ) = 1
+        And ( Lower( new.game ) != Upper( new.game ) )
+        And ( Select Count() = 0 From h_guesses Where Upper( letter ) = Upper( new.game ) )
+        And ( Select Count() = 1 From h_vars Where k = 'wordid' )
+    Begin
+        Insert Into h_guesses Select Upper( new.game );
+    End;
 
-Insert Into h_words( word ) Select Cast ( atom As Blob ) From JSON_Each( 
+Insert Into h_words( word ) Select atom From JSON_Each( 
 	X'5b22222c2270697065222c2277656c6c222c22696e647573747279222c2266616c6c222c' || 
 	X'2261726368222c22666c6f776572222c2273687574222c2273616665222c22706c656173' || 
 	X'65222c2267726970222c22646179222c226d6f6f6e222c2273706f6f6e222c22696e6b22' || 
