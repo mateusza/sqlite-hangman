@@ -1,7 +1,7 @@
 Begin;
 
-Create Table hangman_art ( line Text, num Int, minm Int, maxm Int );
-Insert Into hangman_art Values
+Create View hangman_art ( line, num, minm, maxm ) As
+    Values
     ('  --==[ :TITLE: ]==--', 0, 0, 6 ),
     ('', 1, 0, 6 ),
     ('  :MSG:', 2, 0, 6 ),
@@ -23,10 +23,10 @@ Insert Into hangman_art Values
     ('', 12, 0, 6 );
 
 Create Table vars ( k Text Unique, v );
+Create Index vars_k On vars ( k );
 Insert Into vars Select 'name', 'SQLite Hangman';
-Insert Into vars Select 'version', 'v0.2.0';
+Insert Into vars Select 'version', 'v0.3.0';
 
-Create Table words ( id Integer Primary Key, word Text Not Null Unique );
 Create Table guesses ( letter Text Not Null Unique );
 
 Create View word As
@@ -131,7 +131,8 @@ Create Trigger action_guess_letter
         Insert Into guesses Select Upper( new.game );
     End;
 
-Insert Into words( word ) Select atom From JSON_Each( 
+Create View words ( id, word ) As
+    Select key, atom From JSON_Each(
     '["able","about","account","acid","across","act","addition","adjustment",' ||
     '"advertisement","after","again","against","agreement","air","all","almos' ||
     't","among","amount","amusement","and","angle","angry","animal","answer",' ||
@@ -227,7 +228,6 @@ Insert Into words( word ) Select atom From JSON_Each(
     'll","west","wet","wheel","when","where","while","whip","whistle","white"' ||
     ',"who","why","wide","will","wind","window","wine","wing","winter","wire"' ||
     ',"wise","with","woman","wood","wool","word","work","worm","wound","writi' ||
-    'ng","wrong","year","yellow","yes","yesterday","you","young"]' )
-    Where type = 'text';
+    'ng","wrong","year","yellow","yes","yesterday","you","young"]' );
 
 Commit;
