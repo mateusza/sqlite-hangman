@@ -1,5 +1,8 @@
 Begin;
 
+Create View banner( name, version, author ) As Values
+( 'SQLite Hangman', 'v0.4.0', 'Mateusz Adamowski' );
+
 Create View hangman_art ( line, num, minm, maxm ) As
     Values
     ('  --==[ :TITLE: ]==--', 0, 0, 6 ),
@@ -22,19 +25,16 @@ Create View hangman_art ( line, num, minm, maxm ) As
     ('', 11, 0, 6 ),
     ('', 12, 0, 6 );
 
-Create Table vars ( k Text Unique, v );
-Create Index vars_k On vars ( k );
-Insert Into vars Select 'name', 'SQLite Hangman';
-Insert Into vars Select 'version', 'v0.3.0';
+Create Table wordid ( wordid Int Not Null Unique );
 
 Create Table guesses ( letter Text Not Null Unique );
 
 Create View word As
     Select Upper( word ) As word
-    From vars
-    Join words
-    On ( words.id = vars.v )
-    Where vars.k = 'wordid';
+    From words
+    Join wordid
+    On ( words.id = wordid.wordid )
+    Limit 1;
 
 Create View question As
     With Recursive pos(n,q) As (
@@ -78,7 +78,7 @@ Create View message As
         Case
         When ( Select Count() = 0 From guesses )
         Then (
-            Case When ( Select Count() = 0 From vars Where k = 'wordid' )
+            Case When ( Select Count() = 0 From wordid )
             Then '> insert into game select ''start'';'
             Else '> insert into game select ''x'';' End
         )
@@ -95,10 +95,7 @@ Create View game As
         When InStr( line, ':MSG:' )
         Then Replace( line, ':MSG:', ( Select msg From message ) )
         When InStr( line, ':TITLE:' )
-        Then Replace( line, ':TITLE:',
-            ( Select v From vars Where k = 'name' ) || ' ' ||
-            ( Select v From vars Where k = 'version' )
-        )
+        Then Replace( line, ':TITLE:', ( Select name || ' ' || version From banner ) )
         When InStr( line, ':WORD:' )
         Then Replace( line, ':WORD:', ( Select question From question ) )
         When InStr( line, ':GUESSES:' )
@@ -115,8 +112,9 @@ Create Trigger action_start_game
     Instead Of Insert On game
     When Upper( new.game ) = 'START'
     Begin
-        Insert Or Replace Into vars
-            Select 'wordid', id From words Order By Random() Limit 1;
+        Delete From wordid;
+        Insert Into wordid
+            Select id From words Order By Random() Limit 1;
         Delete From guesses;
     End;
 
@@ -126,7 +124,7 @@ Create Trigger action_guess_letter
         Length( new.game ) = 1
         And ( Lower( new.game ) != Upper( new.game ) )
         And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
-        And ( Select Count() = 1 From vars Where k = 'wordid' )
+        And ( Select Count() = 1 From wordid )
     Begin
         Insert Into guesses Select Upper( new.game );
     End;
