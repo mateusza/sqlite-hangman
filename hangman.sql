@@ -3,6 +3,16 @@ Begin;
 Create View banner( name, version, author ) As Values
 ( 'SQLite Hangman', 'v0.4.0', 'Mateusz Adamowski' );
 
+Create Table level (
+    id Integer Primary Key
+        Not Null
+        Check ( id = 1 ),
+    levelname Text
+        Not Null
+        Check ( levelname in ( 'normal', 'nightmare', 'easy' ) )
+);
+Insert into level select 1, 'normal';
+
 Create View hangman_art ( line, num, minm, maxm ) As
     Values
     ('  --==[ :TITLE: ]==--', 0, 0, 6 ),
@@ -83,10 +93,10 @@ Create View message As
             Else '> insert into game select ''x'';' End
         )
         When ( Select 'gameover' = status From status )
-        Then 'GAME OVER'
+        Then 'GAME OVER: ' || ( Select word From word )
         When ( Select 'win' = status From status )
         Then 'You won!'
-        Else 'Guess another letter.'
+        Else 'Guess another letter...'
         End As msg;
 
 Create View game As
@@ -108,6 +118,12 @@ Create View game As
         Where ( Select failcount Between minm And maxm From failcount )
         Order By num;
 
+Create View possible_words As
+ Select id, word From words Join question Where ( Upper( word ) Like question )
+ Except
+ Select Distinct id, word From words Join fails Join question
+ Where ( InStr( word, Lower( letter ) ) );
+
 Create Trigger action_start_game
     Instead Of Insert On game
     When Upper( new.game ) = 'START'
@@ -118,16 +134,88 @@ Create Trigger action_start_game
         Delete From guesses;
     End;
 
-Create Trigger action_guess_letter
+Create Trigger action_guess_letter_normal
     Instead Of Insert On game
     When
-        Length( new.game ) = 1
+        ( Select levelname From level ) = 'normal'
+        And Length( new.game ) = 1
         And ( Lower( new.game ) != Upper( new.game ) )
         And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
         And ( Select Count() = 1 From wordid )
     Begin
         Insert Into guesses Select Upper( new.game );
     End;
+
+Create Trigger action_guess_letter_nightmare_swap
+    Instead Of Insert On game
+    When
+        ( Select levelname From level ) = 'nightmare'
+        And Length( new.game ) = 1
+        And ( Lower( new.game ) != Upper( new.game ) )
+        And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
+        And ( Select Count() = 1 From wordid )
+        And ( Select Count() > 0 From possible_words
+            Where Not InStr( Upper( word ), Upper( new.game ) )
+        )
+    Begin
+        Update wordid Set wordid = (
+            Select id From possible_words
+            Where Not InStr( Upper( word ), Upper( new.game ) )
+            Order By Random() Limit 1
+        );
+        Insert Into guesses Select Upper( new.game );
+    End;
+
+Create Trigger action_guess_letter_nightmare_noswap
+    Instead Of Insert On game
+    When
+        ( Select levelname From level ) = 'nightmare'
+        And Length( new.game ) = 1
+        And ( Lower( new.game ) != Upper( new.game ) )
+        And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
+        And ( Select Count() = 1 From wordid )
+        And ( Select Count() = 0 From possible_words
+            Where Not InStr( Upper( word ), Upper( new.game ) )
+        )
+    Begin
+        Insert Into guesses Select Upper( new.game );
+    End;
+
+Create Trigger action_guess_letter_easy_swap
+    Instead Of Insert On game
+    When
+        ( Select levelname From level ) = 'easy'
+        And Length( new.game ) = 1
+        And ( Lower( new.game ) != Upper( new.game ) )
+        And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
+        And ( Select Count() = 1 From wordid )
+        And ( Select Count() > 0 From possible_words
+            Where InStr( Upper( word ), Upper( new.game ) )
+        )
+    Begin
+        Update wordid Set wordid = (
+            Select id From possible_words
+            Where InStr( Upper( word ), Upper( new.game ) )
+            Order By Random() Limit 1
+        );
+        Insert Into guesses Select Upper( new.game );
+    End;
+
+Create Trigger action_guess_letter_easy_noswap
+    Instead Of Insert On game
+    When
+        ( Select levelname From level ) = 'easy'
+        And Length( new.game ) = 1
+        And ( Lower( new.game ) != Upper( new.game ) )
+        And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
+        And ( Select Count() = 1 From wordid )
+        And ( Select Count() = 0 From possible_words
+            Where InStr( Upper( word ), Upper( new.game ) )
+        )
+    Begin
+        Insert Into guesses Select Upper( new.game );
+    End;
+
 
 Create View words ( id, word ) As
     Select key, atom From JSON_Each(
