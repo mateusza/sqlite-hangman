@@ -124,6 +124,54 @@ Create View possible_words As
  Select Distinct id, word From words Join fails Join question
  Where ( InStr( word, Lower( letter ) ) );
 
+Create View word_lengths( len ) As
+ Select Distinct Length( word )
+ From words;
+
+Create View winning_nightmare As
+    Select
+    *, (
+        Select count()
+        From words
+        Where Length(word) = len And Not (
+            InStr( Upper(word), l1 ) Or
+            InStr( Upper(word), l2 ) Or
+            Instr( Upper(word), l3 ) Or
+            Instr( Upper(word), l4 ) Or
+            Instr( Upper(word), l5 )
+        )
+    ) As wn
+    From five_letters
+    Join word_lengths
+    Where wn <= 1;
+
+Create View abc(letter) As
+    With Recursive a(letter) As (
+        Select 'A'
+        Union All
+        Select
+            Char( Unicode( letter ) + 1 ) 
+        From a
+        Where letter < 'Z'
+        )
+    Select * From a;
+
+Create View five_letters( l1, l2, l3, l4, l5 ) As 
+    Select *
+    From abc a1, abc a2, abc a3, abc a4, abc a5
+    Where a1.letter < a2.letter And a2.letter < a3.letter And a3.letter < a4.letter And a4.letter < a5.letter;
+
+Create View hint(letter,"count",words) As
+    Select abc.letter As letter, count() as "count", group_concat( word, ', ' )
+    From abc
+    Left Join guesses
+    On ( Upper( guesses.letter ) = Upper( abc.letter ) )
+    Join possible_words
+    On ( InStr( Upper( word ), Upper( abc.letter ) ) )
+    Where guesses.letter Is Null
+    Group By abc.letter
+    Order By "count" Desc;
+
 Create Trigger action_start_game
     Instead Of Insert On game
     When Upper( new.game ) = 'START'
