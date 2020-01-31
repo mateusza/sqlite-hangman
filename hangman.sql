@@ -1,7 +1,7 @@
 Begin;
 
 Create View banner( name, version, author ) As Values
-( 'SQLite Hangman', 'v0.5.0', 'Mateusz Adamowski' );
+( 'SQLite Hangman', 'v0.5.1', 'Mateusz Adamowski' );
 
 Create Table level (
     id Integer Primary Key

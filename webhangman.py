@@ -24,7 +24,7 @@ class HangmanAPI( http.server.BaseHTTPRequestHandler ):
 		super().__init__( request, client_address, server )
 
 	def query_db( self, command, params=tuple() ):
-		self.db.cursor().execute( command, params )
+		return self.db.cursor().execute( command, params )
 
 	def __del__( self ):
 		self.db.commit()
@@ -46,7 +46,7 @@ class HangmanAPI( http.server.BaseHTTPRequestHandler ):
 		if "/" == self.path:
 			self.respondHTML( open("hangman.html").read() )
 		elif "/game" == self.path:
-			self.respondText( "\n".join( [ x[0] for x in self.db.cursor().execute("Select * From game" ) ] ) )
+			self.respondText( "\n".join( [ x[0] for x in self.query_db("Select * From game" ) ] ) )
 		else:
 			self.respondHTML( "<h1><code>500</code> ERROR</h1>", 500 )
 
@@ -67,7 +67,7 @@ class HangmanAPI( http.server.BaseHTTPRequestHandler ):
 			self.query_db( "Insert Or Replace Into level Select 1, ?", ( level, ) )
 			self.respondText( "OK" )
 		elif "/restart" == self.path:
-			self.db.cursor().execute( "Insert Into game Select 'start'" )
+			self.query_db( "Insert Into game Select 'start'" )
 			self.respondText( "OK" )
 		elif "/undo" == self.path:
 			self.query_db( "Delete From guesses Where rowid = ( Select max(rowid) From guesses )" )
