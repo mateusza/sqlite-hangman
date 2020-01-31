@@ -1,7 +1,7 @@
 Begin;
 
 Create View banner( name, version, author ) As Values
-( 'SQLite Hangman', 'v0.4.0', 'Mateusz Adamowski' );
+( 'SQLite Hangman', 'v0.5.0', 'Mateusz Adamowski' );
 
 Create Table level (
     id Integer Primary Key
@@ -11,7 +11,7 @@ Create Table level (
         Not Null
         Check ( levelname in ( 'normal', 'nightmare', 'easy' ) )
 );
-Insert into level select 1, 'nightmare';
+Insert into level select 1, 'normal';
 
 Create View hangman_art ( line, num, minm, maxm ) As
     Values
