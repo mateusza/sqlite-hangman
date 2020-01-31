@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SQLite Hangman WebUI</title>
+    <style>
+        body {
+            background-color: black;
+        }
+
+        #gameview {
+            font-family: Inconsolata, Consolas;
+            font-size: 6.7vh;
+            padding: 1vh;
+            width: 120vh;
+            height: 80vh;
+            border-radius: 0.4vh;
+            margin: auto;
+        }
+        #hangman[data-color=amber] #gameview {
+            color: #f90;
+            text-shadow: #f90 0 0 0.2vh, #f90 0 0 0.7vh;
+            background-color: #ff990008;
+        }
+
+        #hangman[data-color=mono] #gameview {
+            color: #aaa;
+            text-shadow: #aaa 0 0 0.2vh, #aaa 0 0 0.7vh;
+            background-color: #aaaaaa08;
+        }
+
+        #hangman[data-color=green] #gameview {
+            color: #2f2;
+            text-shadow: #2f2 0 0 0.2vh, #2f2 0 0 0.7vh;
+            background-color: #22ff2208;
+        }
+        
+    </style>
+</head>
+<body>
+    <div id='hangman' data-color="green" >
+        <pre id='gameview'>
+  --==[ SQLite Hangman v_._._ ]==--
+
+            L O A D I N G
+
+        </pre>
+    </div>
+    <script>
+        "use strict"
+        var $$ = {
+            qS : (x) => document.querySelector(x),
+            qSA: (x) => [ ... document.querySelectorAll(x) ]
+        }
+        var H = {
+            toggleColor : function( n ){
+                var colors = [ 'amber', 'mono', 'green' ]
+                var cc = $$.qS("#hangman").getAttribute("data-color")
+                $$.qS("#hangman").setAttribute( "data-color", colors[ ( colors.indexOf( cc ) + 1 ) % colors.length ] )
+            },
+            refresh : function(){
+                fetch( "/game" )
+                    .then( (resp) => resp.text() )
+                    .then( 
+                        text => {
+                            $$.qS('#gameview')
+                                .textContent = text
+                                    .replace("> insert into game select 'x';", "Press a key to select a letter" )
+                                    .replace("> insert into game select 'start';", "Press ^ to start" )
+                        }
+                    )
+            },
+
+            sendletter : function( letter ){
+                fetch( "/letter", {
+                    method : "POST",
+                    headers : {
+                        "Content-Type" : "application/json"
+                    },
+                    body: JSON.stringify( { "letter" : letter } )
+                } )
+                .then( (resp) => resp.text() )
+                .then( (txt) => {
+                    H.refresh();
+                })
+                .catch( (err) => console.error( err ) )
+            }
+        }
+
+        H.refresh()
+
+        document.body.addEventListener('keypress', function(e){
+            if ( ( e.key >= 'A' && e.key <= 'Z' ) || ( e.key >= 'a' && e.key <= 'z' ) ){
+                H.sendletter( e.key );
+            }
+            if ( e.key == '^' || e.key == ':' ){
+                H.sendletter( 'start' );
+            }
+            if ( e.key == '*' ){
+                H.toggleColor();
+            }
+            else {
+            }
+        } )
+
+    </script>
+</body>
+</html>
