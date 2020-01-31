@@ -6,39 +6,95 @@
     <style>
         body {
             background-color: black;
+            margin: 0;
+            padding: 0;
+            border: 0;
+        }
+
+        #letter {
+            position: absolute;
+            top: 20vh;
+            left: 20vw;
+            width: 40vh;
+            height: 50vh;
+            color: #00000000;
+            transition-duration: 800ms;
+            display: flex;
+            align-items: center;
+            opacity: 0.5;
+            padding: 0 30vh 0 0vh;
+        }
+
+        #letter.sending {
+            font-size: 40vh;
+            color: #fff9;
+            padding: 0 0 0 30vh;
+        }
+
+        #letter.ok {
+            font-size: 0.1vh;
+            color: #00000000;
         }
 
         #gameview {
+            padding: 0.3vh;
             font-family: Inconsolata, Consolas;
-            font-size: 6.7vh;
-            padding: 1vh;
-            width: 120vh;
-            height: 80vh;
-            border-radius: 0.4vh;
-            margin: auto;
-        }
-        #hangman[data-color=amber] #gameview {
-            color: #f90;
-            text-shadow: #f90 0 0 0.2vh, #f90 0 0 0.7vh;
-            background-color: #ff990008;
+            font-size: 6.5vh;
+            grid-area: "game";
+            margin: 0 auto;
         }
 
-        #hangman[data-color=mono] #gameview {
-            color: #aaa;
-            text-shadow: #aaa 0 0 0.2vh, #aaa 0 0 0.7vh;
+        #grid {
+            margin: 0;
+            display: grid;
+            width: 100vw;
+            height:100vh;
+            transition-duration: 500ms;
+            grid-template-rows: 1fr;
+            grid-template-columns: 1fr;
+            grid-template-areas: "game";
+        }
+
+        #hangman[data-theme=amber] {
+            color: #f90;
+            background-color: #ff990008;
+            text-shadow: #f90 0 0 0.2vh, #f90 0 0 0.7vh;
+        }
+
+        #hangman[data-theme=mono] {
+            color: #ccc;
+            text-shadow: #fff 0 0 0.2vh, #fff 0 0 0.7vh;
             background-color: #aaaaaa08;
         }
 
-        #hangman[data-color=green] #gameview {
+        #hangman[data-theme=green] {
             color: #2f2;
             text-shadow: #2f2 0 0 0.2vh, #2f2 0 0 0.7vh;
             background-color: #22ff2208;
+        }
+
+        #hangman[data-theme=bluescreen] {
+            color: #fff;
+            text-shadow: #fff 0 0 0.2vh, #fff 0 0 0.7vh;
+            background-color: #080850f0;
+        }
+        #hangman[data-theme=bluescreen] pre::first-line {
+            color: #080850f0;
+            background-color: #fff;
+        }
+
+        #hangman[data-theme=c64] {
+            color: #98f;
+            text-shadow: #98f 0 0 0.2vh, #98f 0 0 0.7vh;
+            background-color: #33a;
+            text-transform: uppercase;
         }
         
     </style>
 </head>
 <body>
-    <div id='hangman' data-color="green" >
+    <section id=hangman data-theme=green>
+    <div id='grid'>
         <pre id='gameview'>
   --==[ SQLite Hangman v_._._ ]==--
 
@@ -46,6 +102,9 @@
 
         </pre>
     </div>
+    <div id='letter'></div>
+    </section>
+
     <script>
         "use strict"
         var $$ = {
@@ -53,10 +112,19 @@
             qSA: (x) => [ ... document.querySelectorAll(x) ]
         }
         var H = {
-            toggleColor : function( n ){
-                var colors = [ 'amber', 'mono', 'green' ]
-                var cc = $$.qS("#hangman").getAttribute("data-color")
-                $$.qS("#hangman").setAttribute( "data-color", colors[ ( colors.indexOf( cc ) + 1 ) % colors.length ] )
+            toggleTheme : function( th ){
+                var themes = "amber mono green bluescreen c64".split(" ")
+                if ( undefined == th ){
+                    var th = $$.qS("#hangman").getAttribute("data-theme")
+                    var th = themes[ ( themes.indexOf( th ) + 1 ) % themes.length ]
+                }
+                else {
+                    if ( themes.indexOf( th ) < 0 ){
+                        th = themes[0]
+                    }
+                }
+                window.localStorage.setItem('theme',th)
+                $$.qS("#hangman").setAttribute( "data-theme", th )
             },
             refresh : function(){
                 fetch( "/game" )
@@ -72,6 +140,8 @@
             },
 
             sendletter : function( letter ){
+                $$.qS("#letter").textContent = letter.toUpperCase()
+                $$.qS("#letter").setAttribute("class","sending")
                 fetch( "/letter", {
                     method : "POST",
                     headers : {
@@ -82,22 +152,94 @@
                 .then( (resp) => resp.text() )
                 .then( (txt) => {
                     H.refresh();
+                    H.timeout = window.setTimeout( () => {
+                        $$.qS("#letter").setAttribute("class","ok")
+                        $$.qS("#letter").textContent = ""
+                    }, 670 )
                 })
                 .catch( (err) => console.error( err ) )
+            },
+
+            restart : function(){
+                fetch( "/restart", {
+                    method : "POST",
+                    body: "r"
+                } )
+                .then( (resp) => resp.text() )
+                .then( (txt) => {
+                    H.refresh();
+                })
+
+            },
+
+            undo : function(){
+                fetch( "/undo", {
+                    method : "POST",
+                    body : "x"
+                } )
+                .then ( (r) => r.text() )
+                .then ( (txt) => {
+                    H.refresh();
+                })
+                .catch( (err) => console.error( err ) )
+            },
+
+            changelevel : function( level ){
+                fetch( "/level", {
+                    method : "POST",
+                    headers : {
+                        "Content-Type" : "application/json"
+                    },
+                    body: JSON.stringify( { "level" : level } )
+                } )
+                .then( (resp) => resp.text() )
+                .then( (txt) => {
+                    H.refresh();
+                })
+                .catch( (err) => console.error( err ) )
+            },
+
+            help : function(){
+                $$.qS('#gameview').textContent = [
+                    "--==[ SQLite Hangman Web UI ]==--",
+                    "",
+                    "^ :         restart",
+                    "a-z A-Z     guess a letter",
+                    "*           change color theme",
+                    "<           undo last guess",
+                    "?           this help",
+                    "\"           refresh (exit help)",
+                    "1           easy",
+                    "2           normal",
+                    "3           nightmare"
+                ].join("\n")
             }
         }
 
         H.refresh()
+        H.toggleTheme( window.localStorage.getItem( 'theme' ) )
 
         document.body.addEventListener('keypress', function(e){
             if ( ( e.key >= 'A' && e.key <= 'Z' ) || ( e.key >= 'a' && e.key <= 'z' ) ){
                 H.sendletter( e.key );
             }
-            if ( e.key == '^' || e.key == ':' ){
-                H.sendletter( 'start' );
+            else if ( e.key >= '1' && e.key <= '3' ){
+                H.changelevel( ['', 'easy','normal','nightmare'][ parseInt( e.key ) ] );
             }
-            if ( e.key == '*' ){
-                H.toggleColor();
+            else if ( e.key == '^' || e.key == ':' ){
+                H.restart();
+            }
+            else if ( e.key == '*' ){
+                H.toggleTheme();
+            }
+            else if ( e.key == '<' ){
+                H.undo();
+            }
+            else if ( e.key == '?' ){
+                H.help();
+            }
+            else if ( e.key == '"' ){
+                H.refresh();
             }
             else {
             }
