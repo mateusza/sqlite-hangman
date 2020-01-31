@@ -11,7 +11,7 @@ Create Table level (
         Not Null
         Check ( levelname in ( 'normal', 'nightmare', 'easy' ) )
 );
-Insert into level select 1, 'normal';
+Insert into level select 1, 'nightmare';
 
 Create View hangman_art ( line, num, minm, maxm ) As
     Values
