@@ -4,7 +4,8 @@
 Web service with Hangman game.
 """
 
-import http.server
+from http.server import HTTPServer
+from http.server import BaseHTTPRequestHandler
 import sqlite3
 import json
 
@@ -20,13 +21,13 @@ def start_hangman():
     """
     Starts the webservice with a game.
     """
-    print("Click here to play: http://%s:%d/" %
-          (CONFIG['addr'], CONFIG['port']))
-    http.server.HTTPServer(
-        (CONFIG['addr'], CONFIG['port']), HangmanAPI).serve_forever()
+    addr, port = CONFIG['addr'], CONFIG['port']
+
+    print(f'Click here to play: http://{addr}:{port}/')
+    HTTPServer((addr, port), HangmanAPI).serve_forever()
 
 
-class HangmanAPI(http.server.BaseHTTPRequestHandler):
+class HangmanAPI(BaseHTTPRequestHandler):
     """
     Hangman API
     """
@@ -55,10 +56,12 @@ class HangmanAPI(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.write_response(body.encode(encoding))
 
-    def respond_html(self, body, code=200):
+    def respond_html(self, body=None, filename=None, code=200):
         """
         Respond with HTML
         """
+        if body is None:
+            body = open(filename, 'r').read()
         self.respond(body, "text/html", code=code)
 
     def respond_text(self, body, code=200):
@@ -73,12 +76,15 @@ class HangmanAPI(http.server.BaseHTTPRequestHandler):
         Handle GET request
         """
         if self.path == "/":
-            self.respond_html(open("hangman.html").read())
+            self.respond_html(filename='hangman.html')
         elif self.path == "/game":
-            self.respond_text(
-                "\n".join([x[0] for x in self.query_db("Select * From game")]))
+            game_screen = "\n".join([x[0] for x in self.query_db("Select * From game")])
+            self.respond_text(game_screen)
         else:
-            self.respond_html("<h1><code>500</code> ERROR</h1>", 500)
+            error_msg = """
+                <h1><code>500</code> ERROR</h1>
+            """
+            self.respond_html(error_msg, 500)
 
     def write_response(self, body):
         """
@@ -90,8 +96,10 @@ class HangmanAPI(http.server.BaseHTTPRequestHandler):
         """
         Retrieve POST data
         """
-        content_length = int(
-            self.headers['Content-Length']) if "Content-Length" in self.headers else 0
+        try:
+            content_length = int(self.headers['Content-Length'])
+        except KeyError:
+            content_length = 0
         return self.rfile.read(content_length)
 
     def do_POST(self):
@@ -101,22 +109,32 @@ class HangmanAPI(http.server.BaseHTTPRequestHandler):
         """
         if self.path == "/letter":
             letter = json.loads(self.postdata())['letter']
-            self.query_db("Insert Into game Select ?", (letter, ))
+            self.query_db("""
+                Insert Into game Select ?
+            """, (letter, ))
             self.respond_text("OK")
         elif self.path == "/level":
             level = json.loads(self.postdata())['level']
-            self.query_db(
-                "Insert Or Replace Into level Select 1, ?", (level, ))
+            self.query_db("""
+                Insert Or Replace Into level Select 1, ?
+            """, (level, ))
             self.respond_text("OK")
         elif self.path == "/restart":
-            self.query_db("Insert Into game Select 'start'")
+            self.query_db("""
+                Insert Into game Select 'start'
+            """)
             self.respond_text("OK")
         elif self.path == "/undo":
-            self.query_db(
-                "Delete From guesses Where rowid = ( Select max(rowid) From guesses )")
+            self.query_db("""
+                Delete From guesses
+                Where rowid = (Select max(rowid) From guesses)
+            """)
             self.respond_text("OK")
         else:
-            self.respond_html("<h1><code>500</code> ERROR</h1>", 500)
+            error_msg = """
+                <h1><code>500</code> ERROR</h1>
+            """
+            self.respond_html(error_msg, 500)
 
 
 if __name__ == '__main__':
