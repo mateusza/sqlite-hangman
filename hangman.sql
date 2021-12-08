@@ -1,64 +1,68 @@
 Begin;
 
-Create View banner( name, version, author ) As Values
-( 'SQLite Hangman', 'v0.5.1', 'Mateusz Adamowski' );
+Create View banner(name, version, author) As Values
+('SQLite Hangman', 'v0.5.1', 'Mateusz Adamowski');
 
 Create Table level (
     id Integer Primary Key
         Not Null
-        Check ( id = 1 ),
+        Check (id = 1),
     levelname Text
         Not Null
-        Check ( levelname in ( 'normal', 'nightmare', 'easy' ) )
+        Check (levelname in ('normal', 'nightmare', 'easy'))
 );
 Insert into level select 1, 'normal';
 
-Create View hangman_art ( line, num, minm, maxm ) As
+Create View hangman_art (line, num, minm, maxm) As
     Values
-    ('  --==[ :TITLE: ]==--', 0, 0, 6 ),
-    ('', 1, 0, 6 ),
-    ('  :MSG:', 2, 0, 6 ),
-    ('', 3, 0, 6 ),
-    ('     +-----+-+', 4, 0, 6 ),
-    ('     |      \|', 5, 0, 6 ),
-    ('     ^       |   :WORD:', 6, 0, 0 ),
-    ('     O       |   :WORD:', 6, 1, 6 ),
-    ('             |', 7, 0, 1 ),
-    ('     |       |', 7, 2, 2 ),
-    ('    /|       |', 7, 3, 3 ),
-    ('    /|\      |', 7, 4, 6 ),
-    ('             |   :GUESSES:', 8, 0, 4 ),
-    ('    /        |   :GUESSES:', 8, 5, 5 ),
-    ('    / \      |   :GUESSES:', 8, 6, 6 ),
-    ('             |', 9, 0, 6 ),
-    ('         ___/|\___', 10, 0, 6 ),
-    ('', 11, 0, 6 ),
-    ('', 12, 0, 6 );
+    ('  --==[ :TITLE: ]==--', 0, 0, 6),
+    ('', 1, 0, 6),
+    ('  :MSG:', 2, 0, 6),
+    ('', 3, 0, 6),
+    ('     +-----+-+', 4, 0, 6),
+    ('     |      \|', 5, 0, 6),
+    ('     ^       |   :WORD:', 6, 0, 0),
+    ('     O       |   :WORD:', 6, 1, 6),
+    ('             |', 7, 0, 1),
+    ('     |       |', 7, 2, 2),
+    ('    /|       |', 7, 3, 3),
+    ('    /|\      |', 7, 4, 6),
+    ('             |   :GUESSES:', 8, 0, 4),
+    ('    /        |   :GUESSES:', 8, 5, 5),
+    ('    / \      |   :GUESSES:', 8, 6, 6),
+    ('             |', 9, 0, 6),
+    ('         ___/|\___', 10, 0, 6),
+    ('', 11, 0, 6),
+    ('', 12, 0, 6);
 
-Create Table wordid ( wordid Int Not Null Unique );
+Create Table wordid (
+    wordid Int Not Null Unique
+);
 
-Create Table guesses ( letter Text Not Null Unique );
+Create Table guesses (
+    letter Text Not Null Unique
+);
 
 Create View word As
-    Select Upper( word ) As word
+    Select Upper(word) As word
     From words
     Join wordid
-    On ( words.id = wordid.wordid )
+    On (words.id = wordid.wordid)
     Limit 1;
 
 Create View question As
-    With Recursive pos(n,q) As (
+    With Recursive pos(n, q) As (
         Select 0 As n , '' As q
         Union All
         Select
             n+1,
             q || Case
-            When Upper( Substr( (Select word From word ), n+1, 1 ) ) In ( Select Upper( letter ) From guesses )
-            Then Upper( Substr( (Select word From word ), n+1, 1 ) )
+            When Upper(Substr((Select word From word), n+1, 1)) In (Select Upper(letter) From guesses)
+            Then Upper(Substr((Select word From word), n+1, 1))
             Else '_'
             End
         From pos
-        Where n < ( Select Length( word ) From word Limit 1 )
+        Where n < (Select Length(word) From word Limit 1)
     )
     Select
         q As question
@@ -69,16 +73,16 @@ Create View question As
 Create View fails As
     Select letter
     From guesses
-    Where InStr( ( Select word From word Limit 1 ), Upper( letter ) ) = 0;
+    Where InStr((Select word From word Limit 1), Upper(letter)) = 0;
 
 Create View failcount As
     Select count() as failcount From fails;
 
 Create View status As
     Select Case
-    When ( Select failcount = 6 From failcount )
+    When (Select failcount = 6 From failcount)
     Then 'gameover'
-    When ( Select question = word From word Join question )
+    When (Select question = word From word Join question)
     Then 'win'
     Else 'guess'
     End As status;
@@ -86,15 +90,15 @@ Create View status As
 Create View message As
     Select
         Case
-        When ( Select Count() = 0 From guesses )
+        When (Select Count() = 0 From guesses)
         Then (
-            Case When ( Select Count() = 0 From wordid )
+            Case When (Select Count() = 0 From wordid)
             Then '> insert into game select ''start'';'
             Else '> insert into game select ''x'';' End
         )
-        When ( Select 'gameover' = status From status )
-        Then 'GAME OVER: ' || ( Select word From word )
-        When ( Select 'win' = status From status )
+        When (Select 'gameover' = status From status)
+        Then 'GAME OVER: ' || (Select word From word)
+        When (Select 'win' = status From status)
         Then 'You won!'
         Else 'Guess another letter...'
         End As msg;
@@ -102,30 +106,30 @@ Create View message As
 Create View game As
     Select
         Case
-        When InStr( line, ':MSG:' )
-        Then Replace( line, ':MSG:', ( Select msg From message ) )
-        When InStr( line, ':TITLE:' )
-        Then Replace( line, ':TITLE:', ( Select name || ' ' || version From banner ) )
-        When InStr( line, ':WORD:' )
-        Then Replace( line, ':WORD:', ( Select question From question ) )
-        When InStr( line, ':GUESSES:' )
-        Then Replace( line, ':GUESSES:', Coalesce(
-            ( Select Group_Concat( letter ) From fails ),
+        When InStr(line, ':MSG:')
+        Then Replace(line, ':MSG:', (Select msg From message))
+        When InStr(line, ':TITLE:')
+        Then Replace(line, ':TITLE:', (Select name || ' ' || version From banner))
+        When InStr(line, ':WORD:')
+        Then Replace(line, ':WORD:', (Select question From question))
+        When InStr(line, ':GUESSES:')
+        Then Replace(line, ':GUESSES:', Coalesce(
+            (Select Group_Concat(letter) From fails),
             '...'
-        ) )
+        ))
         Else line End As game
         From hangman_art
-        Where ( Select failcount Between minm And maxm From failcount )
+        Where (Select failcount Between minm And maxm From failcount)
         Order By num;
 
 Create View possible_words As
- Select id, word From words Join question Where ( Upper( word ) Like question )
+ Select id, word From words Join question Where (Upper(word) Like question)
  Except
  Select Distinct id, word From words Join fails Join question
- Where ( InStr( word, Lower( letter ) ) );
+ Where (InStr(word, Lower(letter)));
 
-Create View word_lengths( len ) As
- Select Distinct Length( word )
+Create View word_lengths(len) As
+ Select Distinct Length(word)
  From words;
 
 Create View winning_nightmare As
@@ -134,11 +138,11 @@ Create View winning_nightmare As
         Select count()
         From words
         Where Length(word) = len And Not (
-            InStr( Upper(word), l1 ) Or
-            InStr( Upper(word), l2 ) Or
-            Instr( Upper(word), l3 ) Or
-            Instr( Upper(word), l4 ) Or
-            Instr( Upper(word), l5 )
+            InStr(Upper(word), l1) Or
+            InStr(Upper(word), l2) Or
+            Instr(Upper(word), l3) Or
+            Instr(Upper(word), l4) Or
+            Instr(Upper(word), l5)
         )
     ) As wn
     From five_letters
@@ -150,31 +154,34 @@ Create View abc(letter) As
         Select 'A'
         Union All
         Select
-            Char( Unicode( letter ) + 1 ) 
+            Char(Unicode(letter) + 1) 
         From a
         Where letter < 'Z'
         )
     Select * From a;
 
-Create View five_letters( l1, l2, l3, l4, l5 ) As 
+Create View five_letters(l1, l2, l3, l4, l5) As 
     Select *
     From abc a1, abc a2, abc a3, abc a4, abc a5
-    Where a1.letter < a2.letter And a2.letter < a3.letter And a3.letter < a4.letter And a4.letter < a5.letter;
+    Where a1.letter < a2.letter
+        And a2.letter < a3.letter
+        And a3.letter < a4.letter
+        And a4.letter < a5.letter;
 
-Create View hint(letter,"count",words) As
-    Select abc.letter As letter, count() as "count", group_concat( word, ', ' )
+Create View hint(letter, `count`, words) As
+    Select abc.letter As letter, count() as `count`, group_concat(word, ', ')
     From abc
     Left Join guesses
-    On ( Upper( guesses.letter ) = Upper( abc.letter ) )
+    On (Upper(guesses.letter) = Upper(abc.letter))
     Join possible_words
-    On ( InStr( Upper( word ), Upper( abc.letter ) ) )
+    On (InStr(Upper( word), Upper(abc.letter)))
     Where guesses.letter Is Null
     Group By abc.letter
-    Order By "count" Desc;
+    Order By `count` Desc;
 
 Create Trigger action_start_game
     Instead Of Insert On game
-    When Upper( new.game ) = 'START'
+    When Upper(new.game) = 'START'
     Begin
         Delete From wordid;
         Insert Into wordid
@@ -185,87 +192,87 @@ Create Trigger action_start_game
 Create Trigger action_guess_letter_normal
     Instead Of Insert On game
     When
-        ( Select levelname From level ) = 'normal'
-        And Length( new.game ) = 1
-        And ( Lower( new.game ) != Upper( new.game ) )
-        And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
-        And ( Select Count() = 1 From wordid )
+        (Select levelname From level) = 'normal'
+        And Length( new.game) = 1
+        And (Lower( new.game) != Upper(new.game))
+        And (Select Count() = 0 From guesses Where Upper(letter) = Upper(new.game))
+        And (Select Count() = 1 From wordid)
     Begin
-        Insert Into guesses Select Upper( new.game );
+        Insert Into guesses Select Upper(new.game);
     End;
 
 Create Trigger action_guess_letter_nightmare_swap
     Instead Of Insert On game
     When
-        ( Select levelname From level ) = 'nightmare'
-        And Length( new.game ) = 1
-        And ( Lower( new.game ) != Upper( new.game ) )
-        And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
-        And ( Select Count() = 1 From wordid )
-        And ( Select Count() > 0 From possible_words
-            Where Not InStr( Upper( word ), Upper( new.game ) )
+        (Select levelname From level) = 'nightmare'
+        And Length(new.game) = 1
+        And (Lower(new.game ) != Upper(new.game))
+        And (Select Count() = 0 From guesses Where Upper(letter) = Upper(new.game))
+        And (Select Count() = 1 From wordid)
+        And (Select Count() > 0 From possible_words
+            Where Not InStr(Upper(word), Upper(new.game))
         )
     Begin
         Update wordid Set wordid = (
             Select id From possible_words
-            Where Not InStr( Upper( word ), Upper( new.game ) )
+            Where Not InStr(Upper(word), Upper(new.game))
             Order By Random() Limit 1
         );
-        Insert Into guesses Select Upper( new.game );
+        Insert Into guesses Select Upper(new.game);
     End;
 
 Create Trigger action_guess_letter_nightmare_noswap
     Instead Of Insert On game
     When
-        ( Select levelname From level ) = 'nightmare'
-        And Length( new.game ) = 1
-        And ( Lower( new.game ) != Upper( new.game ) )
-        And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
-        And ( Select Count() = 1 From wordid )
-        And ( Select Count() = 0 From possible_words
-            Where Not InStr( Upper( word ), Upper( new.game ) )
+        (Select levelname From level) = 'nightmare'
+        And Length(new.game) = 1
+        And (Lower(new.game) != Upper(new.game))
+        And (Select Count() = 0 From guesses Where Upper(letter) = Upper(new.game))
+        And (Select Count() = 1 From wordid)
+        And (Select Count() = 0 From possible_words
+            Where Not InStr(Upper(word), Upper(new.game))
         )
     Begin
-        Insert Into guesses Select Upper( new.game );
+        Insert Into guesses Select Upper(new.game);
     End;
 
 Create Trigger action_guess_letter_easy_swap
     Instead Of Insert On game
     When
-        ( Select levelname From level ) = 'easy'
-        And Length( new.game ) = 1
-        And ( Lower( new.game ) != Upper( new.game ) )
-        And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
-        And ( Select Count() = 1 From wordid )
-        And ( Select Count() > 0 From possible_words
-            Where InStr( Upper( word ), Upper( new.game ) )
-        )
+        (Select levelname From level) = 'easy'
+        And Length(new.game) = 1
+        And (Lower(new.game) != Upper(new.game))
+        And (Select Count() = 0 From guesses Where Upper(letter) = Upper(new.game))
+        And (Select Count() = 1 From wordid)
+        And (Select Count() > 0 From possible_words
+            Where InStr(Upper(word), Upper(new.game))
+       )
     Begin
         Update wordid Set wordid = (
             Select id From possible_words
-            Where InStr( Upper( word ), Upper( new.game ) )
+            Where InStr(Upper(word), Upper(new.game))
             Order By Random() Limit 1
-        );
-        Insert Into guesses Select Upper( new.game );
+       );
+        Insert Into guesses Select Upper(new.game);
     End;
 
 Create Trigger action_guess_letter_easy_noswap
     Instead Of Insert On game
     When
-        ( Select levelname From level ) = 'easy'
-        And Length( new.game ) = 1
-        And ( Lower( new.game ) != Upper( new.game ) )
-        And ( Select Count() = 0 From guesses Where Upper( letter ) = Upper( new.game ) )
-        And ( Select Count() = 1 From wordid )
-        And ( Select Count() = 0 From possible_words
-            Where InStr( Upper( word ), Upper( new.game ) )
-        )
+        (Select levelname From level) = 'easy'
+        And Length(new.game) = 1
+        And (Lower(new.game) != Upper(new.game))
+        And (Select Count() = 0 From guesses Where Upper(letter) = Upper(new.game))
+        And (Select Count() = 1 From wordid)
+        And (Select Count() = 0 From possible_words
+            Where InStr(Upper(word), Upper(new.game))
+       )
     Begin
-        Insert Into guesses Select Upper( new.game );
+        Insert Into guesses Select Upper(new.game);
     End;
 
 
-Create View words ( id, word ) As
+Create View words (id, word) As
     Select key, atom From JSON_Each(
     '["able","about","account","acid","across","act","addition","adjustment",' ||
     '"advertisement","after","again","against","agreement","air","all","almos' ||
@@ -362,6 +369,6 @@ Create View words ( id, word ) As
     'll","west","wet","wheel","when","where","while","whip","whistle","white"' ||
     ',"who","why","wide","will","wind","window","wine","wing","winter","wire"' ||
     ',"wise","with","woman","wood","wool","word","work","worm","wound","writi' ||
-    'ng","wrong","year","yellow","yes","yesterday","you","young"]' );
+    'ng","wrong","year","yellow","yes","yesterday","you","young"]');
 
 Commit;
